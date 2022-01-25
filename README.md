@@ -1,5 +1,5 @@
 # SVAV
-Strucure variants assemble validation a tool to validate structure variants in diploid organisms by using local assembly.
+Strucure variants assembly and validation, a tool to evaluate and validate structure variants in diploid organisms using local assembly.
 At this point it is only usable for deletions and insertions.
 
 ![vertical](https://user-images.githubusercontent.com/97948065/149920073-85aa78b3-88bd-4602-aa30-b45489d9925c.png)

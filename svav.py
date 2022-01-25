@@ -1,7 +1,6 @@
-#strucure variants assemble validation
+#strucure variants assembly and validation
 import os
 import subprocess
-import sys
 import pandas as pd
 from clustering_and_creating import write_fasta
 from calling_sv import writing_sv
@@ -18,16 +17,12 @@ parser.add_argument('sv_call', help='csv file of called structure variants (DEL/
 parser.add_argument('bam', help='bam file corresponding to the variants')
 # optional arguments
 parser.add_argument('-o', default='svav_run', help='output folder')
-#check this again gives out 3 ref right now
-parser.add_argument('-r', action='append', default=['/confidential/tGenVar/ref/hg38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna'], help='reference, the first where the sv is called [hg38]')
+# check this again gives out 3 ref right now, as the default is not overwriten
+parser.add_argument('-r', action='append', default=['/confidential/tGenVar/ref/hg38/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna'], help='reference, the first where the sv is called [hg38], the default is on tGenVar')
 parser.add_argument('-m', choices=['chr', 'one', 'ref'], default='chr', help='map seperatly to corresponding chromosome[default], map everything together to the reference, map individually to the reference(takes longer)')
 
 args = parser.parse_args()
 
-
-# add to PATH: confidential/FamilyR13/CODE/miniconda3/bin for minimap2
-subprocess.run(['export PATH=$PATH:confidential/FamilyR13/CODE/miniconda3/bin'], check=True, shell=True)
-# this does not work :/
 
 # create directory and subfolders
 path = args.o
@@ -136,7 +131,7 @@ print('completed: total assembly', f'it took: {time()-asm_time:.2f}s')
 print('_______________________________________________')
 
 
-#mapping und sv call
+# mapping und sv call
 if args.m == 'one':
     ref_count = 1
     for ref in args.r:
@@ -179,8 +174,7 @@ elif args.m == 'chr':
         ref_count = 1
         for ref in args.r:
 
-
-            if not (os.path.isfile(path + '/ref/ref'+str(ref_count)+'_'+cont+'.fa')): # how to extract name from other ref
+            if not (os.path.isfile(path + '/ref/ref'+str(ref_count)+'_'+cont+'.fa')):
                 ref_command =['samtools faidx '+ref +' '+ cont + ' > '+ path + '/ref/ref'+str(ref_count)+'_'+cont+'.fa']
                 subprocess.run(ref_command, check=True, shell=True)
 
@@ -191,7 +185,7 @@ elif args.m == 'chr':
             log_file = path + '/log/minimap2_'+cont+"_"+str(start)+'.log'
 
             subprocess.run(mapping_command, check=True, shell=True, stdout=open(log_file, 'w'), stderr=subprocess.STDOUT)
-            print('completed: mapping', f'it took: {time()-starttime:.2f}s')
+            print('completed: mapping', f'it took: {time()-map_timetime:.2f}s')
 
             # create index to bam file
             index_time = time()
@@ -202,32 +196,6 @@ elif args.m == 'chr':
             # calling sv script to get SVs of consensus seq
             call_time = time()
             bam_local = pysam.AlignmentFile(bam_file, 'rb')
-
-
-
-
-            padding_vntr = 500
-            for pileupcolumn in bam_local.pileup(cont, start - padding_vntr , start - padding_vntr + 1,truncate=True):
-                st = dict (zip (pileupcolumn.get_query_names(), pileupcolumn.get_query_positions()))
-
-            for pileupcolumn in bam_local.pileup(cont, stop + padding_vntr - 1 , stop + padding_vntr ,truncate=True):
-                en = dict (zip (pileupcolumn.get_query_names(), pileupcolumn.get_query_positions()))
-
-            h_file = path + '/hap_files/ref'+str(ref_count)+'_'+cont+"_"+str(start)+idx+'.fa'
-            fo = open(h_file,'w')
-            r = pysam.FastaFile(args.r[0]) # only works for hg38 as we have the cordinates for that
-            print('> ref',file=fo)
-            print(r.fetch(cont, start - padding_vntr , stop + padding_vntr ),file = fo)
-
-            # need position for other reference, as it differs
-            for read in bam_local.fetch(cont, start - padding_vntr , start - padding_vntr + 1):
-                for h in ['h1','h2']:
-                    if h in read.query_name:
-                        print('> '+h,file=fo)
-                        print(read.query_sequence[st[read.query_name]: en[read.query_name] ],file=fo)
-            fo.close()
-            
-
 
             writing_sv(bam_local,path, [cont], str(ref_count))
             bam_local.close()
@@ -241,7 +209,7 @@ elif args.m == 'ref':
         start = sv_list['pos1'][i]
         stop = sv_list['pos2'][i]
 
-        #check if reads where found otherwise skip
+        # check if reads where found otherwise skip
         if not os.path.isfile(path + '/fasta_files/'+cont+'_'+str(start)+idx+'.fa') or not os.path.isfile(path +'/fasta_files/'+cont+'_'+str(start)+idx+'_h1.fa'):
             continue
         ref_count = 1
@@ -252,7 +220,7 @@ elif args.m == 'ref':
             map_time = time()
 
             bam_file = path + '/bam_files/ref'+str(ref_count)+'_'+cont+"_"+str(start)+idx+'.bam'
-            mapping_command = ['minimap2 -t32 -ax map-pb -2 '+ref+' '+path +'/assemble/asm_'+cont+"_"+str(start)+idx+'*cns.fa | samtools sort -@4 >'+ bam_file]
+            mapping_command = ['minimap2 -t32 -ax map-pb -2 '+ref+' '+path + '/assemble/asm_' + cont + "_" + str(start)+idx+'*cns.fa | samtools sort -@4 >'+ bam_file]
             log_file = path + '/log/minimap2_'+cont+"_"+str(start)+idx+'.log'
 
             subprocess.run(mapping_command, check=True, shell=True, stdout=open(log_file, 'w'), stderr=subprocess.STDOUT)
@@ -276,10 +244,6 @@ elif args.m == 'ref':
 else:
     print('something went wrong with the mapping option, the default was not recognized')
 
-# sv calling on both ? need to know, from which the original calls come from added the ref count to result files
-# still need to know, if the sv is heterozygous or homozygous
-
-
 print(no_asm, 'from', len(sv_list.pos1),'regions were not possible to assemble')
 
 # open haplotype and secondary files and add genotypes
@@ -292,11 +256,7 @@ s_gen = genotyping(s_res)
 p_gen.to_csv(path + '/result/primary_call.txt', index=False)
 s_gen.to_csv(path  + '/result/secondary_call.txt', index=False)
 
-# compare with original call, need type for this
-# loop over original file, check only mapped to first genome
-# file of validated and not validated
-# give option for validation?
-sv_list['validated']=0
+sv_list['validated'] = 0
 
 for i in range(len(sv_list['pos1'])):
     cont = sv_list['Chromosome'][i]
@@ -313,7 +273,7 @@ for i in range(len(sv_list['pos1'])):
     for j in val.index:
         len_val = val.loc[j, 'len']
         pos_val = val.loc[j, 'position']
-        # I can use min_pos=1beacuse teh call is not necessary right, carefull with big SVs
+
         if similar_sv(length, len_val, start, pos_val, min_pos=1):
             sv_list.loc[i,'validated'] = 1
             continue
